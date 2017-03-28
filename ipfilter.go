@@ -29,6 +29,7 @@ type IPPath struct {
 	Nets         []*net.IPNet
 	IsBlock      bool
 	Strict       bool
+	Exceptions   []*net.IPNet
 }
 
 // IPFConfig holds the configuration for the ipfilter middleware.
@@ -46,12 +47,12 @@ type OnlyCountry struct {
 
 // Status is used to keep track of the status of the request.
 type Status struct {
-	countryMatch, inRange bool
+	countryMatch, inRange, isException bool
 }
 
 // Any returns 'true' if we have a match on a country code or an IP in range.
 func (s *Status) Any() bool {
-	return s.countryMatch || s.inRange
+	return (s.countryMatch || s.inRange) && !s.isException
 }
 
 // block will take care of blocking
@@ -166,6 +167,15 @@ func (ipf IPFilter) ShouldAllow(path IPPath, r *http.Request) (bool, string, err
 				for _, rng := range path.Nets {
 					if rng.Contains(clientIP) {
 						rs.inRange = true
+						break
+					}
+				}
+			}
+
+			if len(path.Exceptions) != 0 {
+				for _, rng := range path.Exceptions {
+					if rng.Contains(clientIP) {
+						rs.isException = true
 						break
 					}
 				}
@@ -353,6 +363,19 @@ func ipfilterParseSingle(config *IPFConfig, c *caddy.Controller) (IPPath, error)
 				}
 
 				cPath.Nets = append(cPath.Nets, ipRange...)
+			}
+		case "except":
+			ips := c.RemainingArgs()
+			if len(ips) == 0 {
+				return cPath, c.ArgErr()
+			}
+
+			for _, ip := range ips {
+				ipRange, err := parseIP(ip)
+				if err != nil {
+					return cPath, c.Err("ipfilter: " + err.Error())
+				}
+				cPath.Exceptions = append(cPath.Exceptions, ipRange...)
 			}
 		case "strict":
 			cPath.Strict = true

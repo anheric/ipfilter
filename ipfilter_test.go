@@ -936,6 +936,36 @@ func TestMultipleIpFilters(t *testing.T) {
 				ip 212.222.222.1
 			}`, DataBase), false, "192.168.1.16:_", "/private", http.StatusForbidden,
 		},
+		{
+			fmt.Sprintf(`ipfilter /private {
+				rule block
+				country RU
+				database %s
+				except 5.175.96.22
+			}`, DataBase), false, "5.175.96.22:_", "/private", http.StatusOK,
+		},
+		{
+			fmt.Sprintf(`ipfilter /private {
+				rule allow
+				country RU
+				database %s
+				except 5.175.96.22
+			}`, DataBase), false, "5.175.96.22:_", "/private", http.StatusForbidden,
+		},
+		{
+			`ipfilter /private {
+				rule allow
+				ip 192.168.1.16
+				except 5.175.96.21
+			}`, false, "192.168.1.16:_", "/private", http.StatusOK,
+		},
+		{
+			`ipfilter /private {
+				rule allow
+				ip 5.175.96.22
+				except 5.175.96.22
+			}`, false, "5.175.96.22:_", "/private", http.StatusForbidden,
+		},
 	}
 
 	for i, tc := range TestCases {
